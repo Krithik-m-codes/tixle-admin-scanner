@@ -1,58 +1,142 @@
-import { useState } from 'react';
-import { View, Text, Alert } from 'react-native';
-import { Redirect } from 'expo-router';
-import { useAuth } from '~/hooks/useAuth';
-import { Container } from '~/components/Container';
-import { Button } from '~/components/Button';
-import { signInWithGoogle } from '~/utils/supabase';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import React, { useState } from 'react';
+import { View, Text, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button } from '../../src/components/ui/Button';
+import { Input } from '../../src/components/ui/Input';
+import { useAuth } from '../../src/hooks/useAuth';
+import { LoginFormData } from '../../src/types/forms';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function Login() {
-    const { user } = useAuth();
-    const [loading, setLoading] = useState(false);
+export default function AdminLoginScreen() {
+  const { signIn, signInWithGoogle, isLoading } = useAuth();
 
-    // Redirect if already authenticated
-    if (user) {
-        return <Redirect href="/(dashboard)" />;
+  const [formData, setFormData] = useState<LoginFormData>({
+    email: '',
+    password: '',
+  });
+
+  const [errors, setErrors] = useState<Partial<LoginFormData>>({});
+
+  const validateForm = (): boolean => {
+    const newErrors: Partial<LoginFormData> = {};
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!emailRegex.test(formData.email)) {
+      newErrors.email = 'Please enter a valid admin email address';
     }
 
-    const handleGoogleSignIn = async () => {
-        try {
-            setLoading(true);
-            await signInWithGoogle();
-        } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to sign in with Google');
-        } finally {
-            setLoading(false);
-        }
-    };
+    // Password validation
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
 
-    return (
-        <Container>
-            <View className="flex-1 items-center justify-center px-6">
-                <View className="mb-12 items-center">
-                    <Text className="mb-2 text-3xl font-bold text-gray-800">Welcome Back</Text>
-                    <Text className="text-center text-lg text-gray-600">
-                        Sign in to access the admin panel
-                    </Text>
-                </View>
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
-                <View className="w-full">
-                    <Button
-                        title={loading ? 'Signing in...' : 'Sign in with Google'}
-                        onPress={handleGoogleSignIn}
-                        disabled={loading}
-                        className="w-full flex-row items-center justify-center bg-red-500">
-                        <FontAwesome name="google" size={20} color="white" className="mr-2" />
-                    </Button>
-                </View>
+  const handleInputChange = (field: keyof LoginFormData, value: string) => {
+    setFormData((prev: LoginFormData) => ({ ...prev, [field]: value }));
 
-                <View className="mt-8">
-                    <Text className="text-center text-sm text-gray-500">
-                        Use your Google account to access the event management system
-                    </Text>
-                </View>
+    // Clear error when user starts typing
+    if (errors[field as keyof typeof errors]) {
+      setErrors((prev: Partial<LoginFormData>) => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const handleEmailSignIn = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    const result = await signIn(formData);
+
+    if (result.error) {
+      const errorMessage = result.error?.message || 'An error occurred during sign in';
+      Alert.alert('Sign In Failed', errorMessage);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    const result = await signInWithGoogle();
+
+    if (result.error) {
+      Alert.alert('Google Sign In Failed', result.error?.message || 'An error occurred');
+    }
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-gray-50">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        className="flex-1">
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, padding: 24, justifyContent: 'center' }}
+          showsVerticalScrollIndicator={false}>
+
+          {/* Admin Header */}
+          <View className="mb-8 items-center">
+            <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-indigo-100">
+              <Ionicons name="shield-checkmark" size={32} color="#4F46E5" />
             </View>
-        </Container>
-    );
+            <Text className="mb-2 text-3xl font-bold text-gray-900">Admin Portal</Text>
+            <Text className="text-center text-gray-600">
+              Sign in to access theater management system
+            </Text>
+          </View>
+
+          <View className="mb-6 space-y-5">
+            <Input
+              label="Admin Email"
+              placeholder="Enter your admin email"
+              value={formData.email}
+              onChangeText={(value) => handleInputChange('email', value)}
+              error={errors.email}
+              keyboardType="email-address"
+              autoComplete="email"
+              autoCapitalize="none"
+            />
+
+            <Input
+              label="Password"
+              placeholder="Enter your password"
+              value={formData.password}
+              onChangeText={(value) => handleInputChange('password', value)}
+              error={errors.password}
+              secureTextEntry
+              autoComplete="current-password"
+            />
+
+            <Button
+              title={isLoading ? 'Signing In...' : 'Sign In to Admin Panel'}
+              onPress={handleEmailSignIn}
+              disabled={isLoading}
+              className="mt-2 bg-indigo-600"
+            />
+          </View>
+
+          {/* Admin Features Info */}
+          <View className="mb-6 rounded-lg bg-indigo-50 p-4">
+            <Text className="mb-2 font-semibold text-indigo-900">Admin Features:</Text>
+            <View className="space-y-1">
+              <Text className="text-sm text-indigo-700">• QR Code Ticket Scanner</Text>
+              <Text className="text-sm text-indigo-700">• Event Management</Text>
+              <Text className="text-sm text-indigo-700">• Real-time Reports</Text>
+              <Text className="text-sm text-indigo-700">• Emergency Alerts</Text>
+            </View>
+          </View>
+
+          <View className="items-center">
+            <Text className="text-center text-sm text-gray-500">
+              Restricted access for authorized theater staff only
+            </Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
 }
